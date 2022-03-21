@@ -7,8 +7,13 @@ import android.view.ViewGroup
 import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
+import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.SupportMapFragment
+import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.MarkerOptions
+import com.unero.fusedlocation.R
 import com.unero.fusedlocation.databinding.HomeFragmentBinding
-import com.unero.fusedlocation.helper.PermissionHelper.hasLocationPermission
+import com.unero.fusedlocation.helper.PermissionHelper
 import com.unero.fusedlocation.helper.PermissionHelper.requestLocationPermission
 import com.vmadalin.easypermissions.EasyPermissions
 import com.vmadalin.easypermissions.dialogs.SettingsDialog
@@ -19,6 +24,7 @@ class HomeFragment : Fragment(), EasyPermissions.PermissionCallbacks {
     private val binding get() = _binding as HomeFragmentBinding
 
     private lateinit var viewModel: HomeViewModel
+    private lateinit var mapFragment: SupportMapFragment
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -37,17 +43,29 @@ class HomeFragment : Fragment(), EasyPermissions.PermissionCallbacks {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        binding.btnUpdate.setOnClickListener {
-            if (hasLocationPermission(requireContext())) {
-                viewModel.getLocation(requireContext())
-                viewModel.place.observe(viewLifecycleOwner) {
-                    binding.tvLatitude.text = "Latitude: ${it.latitude}"
-                    binding.tvLongitude.text = "Longitude: ${it.longitude}"
-                    binding.tvPlace.text = "Place: ${it.place}"
+        mapFragment = childFragmentManager.findFragmentById(R.id.map) as SupportMapFragment
+
+        binding.btnUpdate.setOnClickListener { updateLocation() }
+    }
+
+    private fun updateLocation() {
+        if (PermissionHelper.hasLocationPermission(requireContext())) {
+            viewModel.getCurrentLocation(requireContext())
+            viewModel.place.observe(viewLifecycleOwner) { loc ->
+                // Update Text
+                binding.tvLatitude.text = "Latitude: ${loc.latitude}"
+                binding.tvLongitude.text = "Longitude: ${loc.longitude}"
+                binding.tvPlace.text = "Kelurahan: ${loc.place}"
+
+                // Update Google Map
+                mapFragment.getMapAsync {
+                    val currentLoc = LatLng(loc.latitude, loc.longitude)
+                    it.addMarker(MarkerOptions().position(currentLoc).title("You're Here!"))
+                    it.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLoc, 20f))
                 }
-            } else {
-                requestLocationPermission(requireActivity())
             }
+        } else {
+            requestLocationPermission(requireActivity())
         }
     }
 
@@ -55,14 +73,6 @@ class HomeFragment : Fragment(), EasyPermissions.PermissionCallbacks {
         super.onDestroyView()
         _binding = null
     }
-
-//    override fun onRequestPermissionsResult(
-//        requestCode: Int,
-//        permissions: Array<out String>,
-//        grantResults: IntArray
-//    ) {
-//        EasyPermissions.onRequestPermissionsResult(requestCode, permissions, grantResults, this)
-//    }
 
     override fun onPermissionsDenied(requestCode: Int, perms: List<String>) {
         if (EasyPermissions.somePermissionPermanentlyDenied(this, perms)) {
